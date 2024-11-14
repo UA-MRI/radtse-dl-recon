@@ -1,4 +1,4 @@
-docker build -t finufft_pyradrecon \
+docker build -t radtse_dl_recon \
   --build-arg USER_ID=$(id -u) \
   --build-arg GROUP_ID=$(id -g) .
 
