@@ -1,6 +1,6 @@
-# dcdl
+# RADTSE DL RECON
 
-Data consistent deep learning
+Cascaded unrolled neural network for RADTSE reconstruction
 
 
 ## Docker
@@ -17,12 +17,11 @@ It is currently set up to mount the folder that contains all this code
 on the U of A server. This will need to be accounted for non
 Altbach/Bilgin lab people. 
 
-## merlin_src
+## src
 
-This contains my experiments written with merlinth, the pytorch
-version of merlin. 
+### radtse_dlrecon_train.py
+### radtse_dlrecon_test.py
+### validate_t2.py
+### gen_fastMRI_h5.py
+### fastMRI.py
 
-## preprocess_src
-
-This directory contains the scripts that have been used to help
-produce the datasets. 
