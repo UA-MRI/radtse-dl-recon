@@ -20,8 +20,14 @@ Altbach/Bilgin lab people.
 ## src
 
 ### radtse_dlrecon_train.py
+This script creates and trains the proposed DL model for RADTSE reconstruction. It requires training data in .h5 format
+
 ### radtse_dlrecon_test.py
-### validate_t2.py
+This script evaluates the trained model. It requires testing data in .h5 format. Optionally, include a T2 dictionary and roi file, both in .h5 format, to do T2 quantification.
+
 ### gen_fastMRI_h5.py
+Without real RADTSE data, it is possible to use this package on simulated radial data. This script will create simulated radial data from fastMRI data. 
+
 ### fastMRI.py
+This script creates, trains, and evaluates a model trained on simulated fastMRI data. 
 
