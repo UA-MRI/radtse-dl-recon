@@ -51,13 +51,22 @@ class DataGeneratorRADTSE(Dataset):
         # load data
         self._load_h5_file_with_data()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
         traj, dcf, _ = self.__get_traj_dcf_dict__()
 
+        # if ramp is not being used for input, still use it for target
+        if self.dcf_method == 'ramp':
+            self.dcf = dcf
+        
         # set the adjoint model
         if self.image_type == 'composite':
-            self.AH = RadialMulticoilAdjointOp(kspace_dims=[self.nlin,self.ncol], img_dims=self.img_dims, traj=traj, dcf=dcf)
+            # if no dcf used, use ramp for target
+            self.AH = RadialMulticoilAdjointOp(kspace_dims=[self.nlin,self.ncol], img_dims=self.img_dims, traj=traj, dcf=dcf) 
+            self.target_AH = RadialMulticoilAdjointOp(kspace_dims=[self.nlin,self.ncol], img_dims=self.img_dims, traj=self.traj, dcf=self.dcf)
         else:
+            # if no dcf used, use ramp for target
             self.AH = RADTSE_AdjointOp(kspace_dims=[self.nlin,self.ncol], img_dims=self.img_dims, traj=traj, dcf=dcf)
+            self.target_AH = RADTSE_AdjointOp(kspace_dims=[self.nlin,self.ncol], img_dims=self.img_dims, traj=self.traj, dcf=self.dcf)
             
         # prepare batch indexing
         self.on_epoch_end()
@@ -149,20 +158,6 @@ class DataGeneratorRADTSE(Dataset):
         self.dcf = torch.reshape(torch.permute(self.dcf, [1,0,2]), [self.ncol,-1])
         self.dcf = self.dcf / self.dcf.max() # make max = 1
             
-        # use method from pipe/menon 1999
-        if self.dcf_method == 'pipe':
-            from torchkbnufft import calc_density_compensation_function
-
-            self.dcf_pipe = torch.zeros_like(self.dcf, dtype=torch.complex64)
-            print('LOADING PIPE MENON DCF')
-            for ee in range(self.etl):
-                ktraj = np.stack([np.imag(self.traj[ee,].numpy().flatten()),
-                                  np.real(self.traj[ee,].numpy().flatten())])
-                ktraj = torch.tensor(ktraj * (np.pi / np.max(ktraj)))
-                # our usual convention is that the trajectory is in [-0.5, 0.5],
-                # while here it is in [-pi, pi], so we multiply by pi/max 
-                dcomp = calc_density_compensation_function(ktraj, self.img_dims)
-                self.dcf_pipe[ee,] = torch.reshape(dcomp, [self.ncol, self.nshot])   
         
         h5file.close()
         
@@ -186,7 +181,22 @@ class DataGeneratorRADTSE(Dataset):
 
     def __get_traj_dcf_dict__(self,idx=0):
         'Returns an example trajectory, dcf, and dict'
-        return self.traj.to(self.device), self.dcf.to(self.device), self.D[idx,:,:].to(self.device)
+        # use method from pipe/menon 1999
+        if self.dcf_method == 'pipe':
+            if self.phase == 'train':
+                masks = torch.ones_like(self.get_masks())
+            else:               
+                masks = self.get_masks()
+            masks = torch.permute(masks[0,], [1,0]).cpu()
+            
+            dcf = compute_pipe_dcf(self.traj * masks, self.ncol, self.etl, self.nshot, self.img_dims, self.image_type)
+        # or don't use dcf (all ones)
+        elif self.dcf_method == 'ones':
+            dcf = torch.ones_like(self.dcf)
+        else:
+            dcf = self.dcf
+        
+        return self.traj.to(self.device), dcf.to(self.device), self.D[idx,:,:].to(self.device)
 
     def __get_cs__(self, index, algorithm='LLR'):
         'Returns CS PC maps'
@@ -250,19 +260,20 @@ class DataGeneratorRADTSE(Dataset):
             cs = self.__get_cs__(index).to(self.device)
             # if in test mode, look for CS recon as target
             if cs.abs().sum() == 0 or torch.isnan(cs).sum() or self.image_type == 'composite' or self.nlin > 384:
-                print('cannot find CS recon as target')
                 if self.R == 1:
                     # if R = 1 and no CS, then we dont have a target
+                    print('No targets found')
                     targets = None
                 else:
                     # if R < 1 and no CS, use the R = 1 version as the target
-                    targets = self.AH(kspace, torch.ones_like(masks), smaps, D).to(self.device)
+                    print('using R=1 NUFFT as target')
+                    targets = self.target_AH(kspace, torch.ones_like(masks), smaps, D).to(self.device)
             else:
                 print('using CS recon as target')
                 targets = self.crop_smaps(cs)
         else:
             # if in valid or train mode, just use the R = 1 version as the target
-            targets = self.AH(kspace, torch.ones_like(masks), smaps, D).to(self.device)
+            targets = self.target_AH(kspace, torch.ones_like(masks), smaps, D).to(self.device)
         
         # normalize
         if self.normalize:
@@ -287,12 +298,15 @@ class DataGeneratorRADTSE(Dataset):
             traj = torch.reshape(self.traj, [self.ncol, self.etl, self.nshot])
             angles = np.angle(traj[0,self.ref_echo,:]) # all angles available in trajectory
             angles = angles + np.pi * (angles < 0) # rescale to [0, 2*pi]
+            # angle0 = angles[np.random.choice(self.nshot)] # random angle
             angle0 = angles[0] # first angle
             linindx = [] # line index list
             for angidx in range(0,N):
                 ang = (angle0 + angidx * np.pi / N) % np.pi  # ideal angle
                 linindx += [np.argmin(np.abs(angles-ang))] # closest angle to ang
+            
             lin_mask[linindx] = 1 # keep the angles selected
+
 
 
         lin_mask = lin_mask.astype(bool) # convert to bool for indexing
@@ -319,7 +333,7 @@ class DataGeneratorRADTSE(Dataset):
         return smaps
 
             
-    def qc_data_generator(self, A, AH, idx=0, qcdir='./qc/'):
+    def qc_data_generator(self, A, AH, idx=0, qcdir='/clusterscratch/tonerbp/dlrecon_radtse/qc/'):
         ''' QC check for the data loader '''
         # get inputs, targets
         inputs, targets, _ = self.__getitem__(idx)
@@ -354,7 +368,7 @@ class DataGeneratorRADTSE(Dataset):
         # check that our new AHk matches the AHk the data loader gave
         loss = torch.norm(inputs[0] - AHk).item()
         # save qc images
-        if loss > 1 or idx == 0:
+        if True: # loss > 1 or idx == 0:
             AHAx = AH(Ax, *inputs[2:])
             AAHk = A(AHk, *inputs[2:])
             Ax = A(inputs[0], *inputs[2:]) 
@@ -383,7 +397,7 @@ class DataGeneratorRADTSE(Dataset):
             plt.imsave(f'{qcdir}AHAx.png',AHAx,cmap='gray',vmax=np.percentile(AHAx ,99))
 
             
-            for ee in range(self.etl):
+            for ee in [0]: #range(self.etl):
                 img = torch.reshape((traj * torch.permute(inputs[2], [0,2,1])).squeeze(), [inputs[1].shape[-1],etl,-1])[:,ee,]
                 img = img.detach().cpu().numpy()
                 plt.plot(np.real(img), np.imag(img))
@@ -394,8 +408,8 @@ class DataGeneratorRADTSE(Dataset):
                 plt.imsave(f'{qcdir}dcf.tiff', np.transpose(img), cmap='gray', vmax=np.percentile(img, 99))
             
 
-            # if idx == 0:
-                # pdb.set_trace() # pause for debugging
+            if True: # idx == 0:
+                pdb.set_trace() # pause for debugging
 
         return loss
 
