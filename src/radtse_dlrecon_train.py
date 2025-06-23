@@ -28,15 +28,14 @@ np.random.seed(2024)
 os.system('printenv | grep "CUDA_VISIBLE_DEVICES"')
 
 # DATA INFO
-coils = 6 # number of channels found in input data (virtual or otherwise)
 nlin = 384 # number of radial views in input data
 ncol = 512 # number of readout points in input data
 img_dims = [320, 320] # this will overwrite what is found in input data
 
 # INPUT DATA LOCATION
-h5_dir = '/clusterscratch/tonerbp/data/h5_data/h5_radtse_pcs/' # dir with data
-train_h5 = f'{h5_dir}radtse_{coils:02d}coils_FBpaper_{nlin}_train.h5'
-valid_h5 = f'{h5_dir}radtse_{coils:02d}coils_FBpaper_{nlin}_valid.h5'
+h5_dir = '/clusterscratch/tonerbp/data/h5_data/h5_radtse/' # dir with data
+train_h5 = f'{h5_dir}radtse_FBpaper_{nlin}_train.h5'
+valid_h5 = f'{h5_dir}radtse_FBpaper_{nlin}_valid.h5'
 
 # MODEL PARAMETERS
 DC_layer = 'DCGD' # type of DC layer. 'DCGD' or 'DCPM'
@@ -63,6 +62,7 @@ gamma_str = f'{gamma}'.replace('.','p')
 hdr_eps= 1e-3 # epsilon for HDR loss
 corner_penalty = False # penalizes non-zero frequencies in the corners outside of radial trajectory
 disjoint_loss = False # 1: calculate loss only on frequencies not used in input, 0: calculate loss on all frequencies
+dcf_method = 'ramp' # dcf method--options: 'ramp' 'pipe' or 'ones'
 
 # TRAINING PARAMETERS
 NUM_EPOCHS = 3 # number of training epochs
@@ -110,7 +110,6 @@ config = {}
 
 config['odir'] = odir
 # DATA DETAILS
-config['coils'] = coils
 config['nlin'] = nlin
 config['h5_dir'] = h5_dir
 config['valid_h5'] = valid_h5
@@ -139,6 +138,7 @@ config['denoiser_model'] = denoiser
 config['complex_network'] = complex_network
 config['ema'] = ema
 config['disjoint_loss'] = disjoint_loss
+config['dcf_method'] = dcf_method
 
 # TRAINING DETAILS
 config['normalize'] = True
@@ -177,6 +177,7 @@ valid_generator = DataGeneratorRADTSE(valid_h5,
                                       image_type,
                                       phase='valid',
                                       config=config,
+                                      dcf_method=dcf_method,
                                       R=0.5)
 print('Validation batches to process:', len(valid_generator))
 print('loading train generator')
@@ -185,7 +186,8 @@ print(train_h5)
 train_generator = DataGeneratorRADTSE(train_h5,
                                       image_type,
                                       phase='train',
-                                      config=config)
+                                      config=config,
+                                      dcf_method=dcf_method)
 print('Training batches to process:', len(train_generator))
 
 # INITIALIZE LOSS FUNCTION
@@ -205,7 +207,7 @@ else:
     A = RADTSE_ForwardOp(kspace_dims=(nlin,ncol), img_dims=img_dims, traj=traj, dcf=dcf)
     AH = RADTSE_AdjointOp(kspace_dims=(nlin,ncol), img_dims=img_dims, traj=traj, dcf=dcf)
 
-model = RADTSEUnrolledNetwork(A=A, AH=AH, config=config)
+model = RADTSEUnrolledNetwork(A=A, AH=AH, config=config, criterion=criterion)
 if ema:
     ema_model = AveragedModel(model, avg_fn=get_ema_multi_avg_fn(0.999))
 else:
