@@ -26,6 +26,7 @@ This script creates and trains the proposed DL model for RADTSE reconstruction. 
 - traj (etl, nshots, nsteps, nslice, 2): kspace trajectory coordinates
 - dcf (etl, nshots, nsteps, nslice, 2): density compensation function
 - dict (npcs, etl, nslice): temporal compression operator (used for TE/T2 network only)
+
 With the following dimensions:
 - ncoils: number of (virtual) coils. We compress our data to 6 virtual coils to save memory and ensure all datasets have the same number of coils
 - etl: echo train length, or the number of readouts following an excite pulse
@@ -34,6 +35,7 @@ With the following dimensions:
 - nslice: number of slices in the dataset
 - nx, ny: image dimensions of the sensitivity maps. These are automatically cropped if larger than the desired image size
 - npcs: number of principal components used in temporal compression (used for TE/T2 network only)
+
 In the version of matlab we used to generate the .h5 files (2020a), writing complex datasets was not supported, so the final dimension for complex fields denotes the real and imaginary components of the data.
 h5py does support writing and reading complex datasets, which is much faster than reading the real data and converting to complex. So the first time we encounter the .h5 file in python we re-write it as a complex dataset to be read in future iterations. This step could easily be removed if you start with complex datasets (in the `src/dataset/DataGenertor.py` file). 
 
