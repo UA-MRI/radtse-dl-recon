@@ -112,10 +112,13 @@ class DataGeneratorRADTSE(Dataset):
                 imax = np.min([nslc, imin+1000])
     
                 print(f'saving slices {imin}-{imax} of {nslc} total')
-                
-                print(f'saving prescan norm. {time()-tstart:.2f}s elapsed')
-                tmp = h5file['prescan_norm'][...,imin:imax]
-                prescan_norm[imin:imax,...] = np.transpose(tmp, (2,0,1))
+
+                if 'prescan_norm' in h5file.keys():
+                    print(f'saving prescan norm. {time()-tstart:.2f}s elapsed')
+                    tmp = h5file['prescan_norm'][...,imin:imax]
+                    prescan_norm[imin:imax,...] = np.transpose(tmp, (2,0,1))
+                else:
+                    prescan_norm[imin:imax,...] = np.ones([imax-imin, nx, ny])
                 
                 print(f'saving kspace slices. {time()-tstart:.2f}s elapsed')
                 tmp = (h5file['kspace'][...,imin:imax,0] + 1j*h5file['kspace'][...,imin:imax,1]).squeeze()
