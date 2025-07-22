@@ -28,14 +28,14 @@ np.random.seed(2024)
 os.system('printenv | grep "CUDA_VISIBLE_DEVICES"')
 
 # DATA INFO
-nlin = 384 # number of radial views in input data
+nlin = 516 # number of radial views in input data
 ncol = 512 # number of readout points in input data
-img_dims = [320, 320] # this will overwrite what is found in input data
+img_dims = [256, 256] # this will overwrite what is found in input data
 
 # INPUT DATA LOCATION
-h5_dir = '/clusterscratch/tonerbp/data/h5_data/h5_radtse/' # dir with data
-train_h5 = f'{h5_dir}radtse_FBpaper_{nlin}_train.h5'
-valid_h5 = f'{h5_dir}radtse_FBpaper_{nlin}_valid.h5'
+h5_dir = '/clusterscratch/tonerbp/data/h5_data/h5_radtse_CAMDTECT/' # dir with data
+train_h5 = f'{h5_dir}radtse_CAMDTECT_train.h5'
+valid_h5 = f'{h5_dir}radtse_CAMDTECT_valid.h5'
 
 # MODEL PARAMETERS
 DC_layer = 'DCGD' # type of DC layer. 'DCGD' or 'DCPM'
@@ -47,17 +47,20 @@ ncascades = 5 # total cascades in network
 nconvolutions = 5 # convolutions per denoiser block
 denoiser = 'CNN' # CNN currently supported--could import your own architecture
 complex_network = True # complex weights or append imag parts into channel dim
+hdr = False # high dynamic range loss
 
 # LOSS FUNCTION OPTIONS
 alpha = 0.5 # l1 weighting in loss
 beta = 1-alpha # l2 weighting in loss
-kspace_loss = 0 # 0 for image loss, 1 for kspace loss, 2 for sum of both
+# kspace_loss = 0 for image loss, 1 for kspace loss, 2 for sum of both
+if image_type == 'composite':
+    kspace_loss = 0 # use image space loss for composite
+else:
+    kspace_loss = 1 # use kspace loss for pcs
 if kspace_loss == 2:
     gamma = 0.5 # kspace weighting when kspace and image loss are summed
-    hdr = 1 # high dynamic range loss for kspace
 else:
     gamma = kspace_loss # kspace weighting when kspace and image loss are summed
-    hdr = kspace_loss # high dynamic range loss for kspace
 gamma_str = f'{gamma}'.replace('.','p')
 hdr_eps= 1e-3 # epsilon for HDR loss
 corner_penalty = False # penalizes non-zero frequencies in the corners outside of radial trajectory
@@ -65,7 +68,7 @@ disjoint_loss = False # 1: calculate loss only on frequencies not used in input,
 dcf_method = 'ramp' # dcf method--options: 'ramp' 'pipe' or 'ones'
 
 # TRAINING PARAMETERS
-NUM_EPOCHS = 3 # number of training epochs
+NUM_EPOCHS = 100 # number of training epochs
 batch_size = 1 # batch size
 lr = 1e-4 # learning rate
 use_scheduler = 1 # learning rate scheduler
@@ -73,7 +76,6 @@ weight_decay= 1e-7 # optimizer weight decay
 init_gain = 1e-1 # initialization for CNN weights
 dc_init = 1e-1 # initialization for DC weights
 ema = 1 # exponential moving average
-fastMRI_pretrain = 0 # start with model pretrained on fastMRI data
 
 # SET OUTPUT PATH
 odir = f'/clusterscratch/tonerbp/dlrecon_radtse/results/radtse_{image_type}_{nlin}lin/'
@@ -81,6 +83,7 @@ model_name = f'{denoiser}_{ncascades}x{nconvolutions}/'
 odir = f'{odir}{model_name}'
 if not os.path.exists(odir):
     os.makedirs(odir)
+print(odir)
 
 # FIND OLD MODEL TO LOAD IF AVAILABLE--CONTINUE TRAINING
 pretrain_dir = ''
@@ -162,7 +165,6 @@ config['kspace_loss'] = kspace_loss
 config['TE_loss'] = 0
 config['hdr'] = hdr
 config['hdr_eps'] = hdr_eps
-config['fastMRI_pretrain'] = fastMRI_pretrain
 config['corner_penalty'] = corner_penalty
 
 # SAVE CONFIGURATIONS

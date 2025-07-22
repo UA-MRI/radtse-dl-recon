@@ -15,6 +15,7 @@ import torchvision
 from models.final_layers import *
 from merlinth.losses.pairwise_loss import PSNRLoss
 # from merlinth.losses.ssim import SSIM as SSIMLoss
+from operators.A_functions import *
 
 from utils.utils import *
 
@@ -65,21 +66,13 @@ def plot_psnr_curve(train_psnr_history, valid_psnr_history, out_dir):
     plt.close()
 
 # save qc images
-def epoch_qc(config, qcdir, yhat, targets, inputs, loss_mask, prefix, sample, prescan_norm, radgrase=False, eco=None):
-    if radgrase:
-        ## save only one echo
-        yhat_qc = yhat[:,eco,]
-        # yhat_k_cart_qc = yhat_k_cart[:,eco,]
-        tar = targets[:,eco,]
-        noisy = inputs[0][:,eco,]
-        ksp_inp = inputs[1][:,eco,]
-        loss_mask_qc = loss_mask[:,0,]
-    else:
-        yhat_qc = yhat
-        noisy = inputs[0]
-        ksp_inp = inputs[1]
-        tar = targets
-        loss_mask_qc = loss_mask
+def epoch_qc(config, qcdir, yhat, targets, inputs, loss_mask, prefix, sample, prescan_norm, eco=None):
+    
+    yhat_qc = yhat
+    noisy = inputs[0]
+    ksp_inp = inputs[1]
+    tar = targets
+    loss_mask_qc = loss_mask
         
     if not os.path.exists(qcdir):
         os.makedirs(qcdir)
@@ -125,8 +118,6 @@ def epoch_qc(config, qcdir, yhat, targets, inputs, loss_mask, prefix, sample, pr
                 plt.imsave(f'{qcdir}{prefix}yhat_k_cart_mask.tiff', np.transpose(img), cmap='gray', vmax = np.percentile(img, 99))
                 img = corner_mask.cpu().numpy()
                 plt.imsave(f'{qcdir}{prefix}corner_mask.tiff', np.transpose(img), cmap='gray', vmax=np.percentile(img, 99))
-                        
-        # pdb.set_trace()
         
 
 # train the model
@@ -220,11 +211,7 @@ def train_model(model, optimizer, dataloaders, config, A=None, AH=None,
             for i in range(len(dataloaders[phase])):
                 # get input, move to device
                 inputs, targets, prescan_norm = dataloaders[phase].__getitem__(i)
-                if ncha > 1:
-                    traj, dcf, D = inputs[-3:]
-                else:
-                    traj, dcf = inputs[-2:]
-
+                
                 # print progress
                 if i % np.floor(0.2*len(dataloaders[phase])) == 0:
                     epoch_time = time() - epoch_start 
@@ -287,15 +274,9 @@ def train_model(model, optimizer, dataloaders, config, A=None, AH=None,
                 if i == 0:
                     prefix = f'epoch{epoch}_'
                     sample = 0 #targets.shape[0]-1
-                    if yhat.ndim == 5:
-                        for eco in range(yhat.shape[1]):
-                            qcdir = f'{out_dir}/qc_eco{eco}/'
-                            epoch_qc(config, qcdir, yhat, targets, inputs, loss_mask, prefix, sample, prescan_norm, radgrase=True, eco=eco)
-                    else:
-                        prefix = f'epoch{epoch}_'
-                        sample = 0 #targets.shape[0]-1
-                        qcdir = f'{out_dir}/qc/'
-                        epoch_qc(config, qcdir, yhat, targets, inputs, loss_mask, prefix, sample, prescan_norm, radgrase=False)
+                    qcdir = f'{out_dir}/qc/'
+                    epoch_qc(config, qcdir, yhat, targets, inputs, loss_mask, prefix, sample, prescan_norm)
+                        
                     # pdb.set_trace()
                 #################
 
@@ -305,6 +286,7 @@ def train_model(model, optimizer, dataloaders, config, A=None, AH=None,
                 # calculate psnr with gradient always disabled
                 with torch.set_grad_enabled(False):
                     if isinstance(PSNR, TE_PSNR):
+                        D = inputs[-1][0,]
                         running_psnr += PSNR(targets, yhat, D, 1).item() * inputs[0].size(0)
                     else:
                         running_psnr += PSNR(targets.abs(), yhat.abs(), 1).item() * inputs[0].size(0)

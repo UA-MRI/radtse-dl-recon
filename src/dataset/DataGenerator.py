@@ -120,14 +120,16 @@ class DataGeneratorRADTSE(Dataset):
                 print(f'saving kspace slices. {time()-tstart:.2f}s elapsed')
                 tmp = (h5file['kspace'][...,imin:imax,0] + 1j*h5file['kspace'][...,imin:imax,1]).squeeze()
                 kspace[imin:imax,...] = np.transpose(tmp, (4,0,1,2,3))
-                
-                print(f'saving LLR slices. {time()-tstart:.2f}s elapsed')
-                tmp = (h5file['llr'][...,imin:imax,0] + 1j*h5file['llr'][...,imin:imax,1]).squeeze()
-                llr[imin:imax,...] = np.transpose(tmp, (3,0,1,2))
-                
-                print(f'saving NLR3D slices. {time()-tstart:.2f}s elapsed')
-                tmp = (h5file['nlr3d'][...,imin:imax,0] + 1j*h5file['nlr3d'][...,imin:imax,1]).squeeze()
-                nlr3d[imin:imax,...] = np.transpose(tmp, (3,0,1,2))
+
+                if 'llr' in h5file.keys():
+                    print(f'saving LLR slices. {time()-tstart:.2f}s elapsed')
+                    tmp = (h5file['llr'][...,imin:imax,0] + 1j*h5file['llr'][...,imin:imax,1]).squeeze()
+                    llr[imin:imax,...] = np.transpose(tmp, (3,0,1,2))
+
+                if 'nlr3d' in h5file.keys():
+                    print(f'saving NLR3D slices. {time()-tstart:.2f}s elapsed')
+                    tmp = (h5file['nlr3d'][...,imin:imax,0] + 1j*h5file['nlr3d'][...,imin:imax,1]).squeeze()
+                    nlr3d[imin:imax,...] = np.transpose(tmp, (3,0,1,2))
                 
                 print(f'saving smaps slices. {time()-tstart:.2f}s elapsed')
                 tmp = (h5file['smaps'][...,imin:imax,0] + 1j*h5file['smaps'][...,imin:imax,1]).squeeze()
@@ -206,9 +208,9 @@ class DataGeneratorRADTSE(Dataset):
 
         h5file = h5py.File(self.h5_path_np, 'r')
         for i, ID in enumerate(indexes):
-            if algorithm.upper() =='LLR':
+            if algorithm.upper() =='LLR' and 'llr' in h5file.keys():
                 cs[i,] = torch.from_numpy(h5file['llr'][ID,])
-            elif algorithm.upper() == 'NLR3D':
+            elif algorithm.upper() == 'NLR3D' and 'nlr3d' in h5file.keys():
                 cs[i,] = torch.from_numpy(h5file['nlr3d'][ID,])
                 
         h5file.close()
@@ -220,7 +222,7 @@ class DataGeneratorRADTSE(Dataset):
         indexes = self.indexes[index * self.batch_size:(index + 1) * self.batch_size]
         # pre-allocate outputs
         kspace = torch.empty((self.batch_size, self.ncha, self.nlin, self.ncol), dtype=self.dtype) # rawdata/k-space for data consistency
-        smaps = torch.empty((self.batch_size, self.ncha, self.ncol, self.ncol), dtype=self.dtype) # sensitivity maps
+        smaps = torch.empty((self.batch_size, self.ncha, self.nx, self.ny), dtype=self.dtype) # sensitivity maps
         prescan_norm = torch.ones((self.batch_size, self.nx, self.ny), dtype=self.dtype) # prescan normalization
         D = torch.empty(self.batch_size, self.etl, self.npc, dtype=self.dtype) # signal SVD basis
 
@@ -252,6 +254,11 @@ class DataGeneratorRADTSE(Dataset):
             # mask data according to self.R
             masks = self.get_masks().to(self.device)
 
+            # try again if we masked all non-zero parts
+            if self.phase == 'train':
+                while (kspace*masks.unsqueeze(1)).sum() == 0:
+                    masks = self.get_masks().to(self.device)
+            
         # get noisy input
         noisy = self.AH(kspace, masks, smaps, D).to(self.device)
 
@@ -282,6 +289,7 @@ class DataGeneratorRADTSE(Dataset):
                 targets = self._normalize(targets) # normalize targets
         
         h5file.close()
+            
         return [noisy, kspace, masks, smaps, D], targets, prescan_norm
 
     
@@ -290,7 +298,7 @@ class DataGeneratorRADTSE(Dataset):
         masks = torch.zeros([self.batch_size, self.etl, self.nshot, self.ncol]).to(self.device)
         lin_mask = np.zeros(self.nshot)
         if self.phase == 'train':
-            N = int(np.round(np.random.uniform(2, 2/3*self.nshot))) # randomly select how many TRs
+            N = int(np.round(np.random.uniform(1/6*self.nshot, 2/3*self.nshot))) # randomly select how many TRs
             lin_mask[np.random.choice(self.nshot, N, replace=0)] = 1 # randomly select TRs
         else:
             N = int(np.round(self.R*self.nshot)) # select number of TRs using R
@@ -368,7 +376,7 @@ class DataGeneratorRADTSE(Dataset):
         # check that our new AHk matches the AHk the data loader gave
         loss = torch.norm(inputs[0] - AHk).item()
         # save qc images
-        if True: # loss > 1 or idx == 0:
+        if np.isnan(loss) or loss > 1:
             AHAx = AH(Ax, *inputs[2:])
             AAHk = A(AHk, *inputs[2:])
             Ax = A(inputs[0], *inputs[2:]) 
@@ -408,7 +416,7 @@ class DataGeneratorRADTSE(Dataset):
                 plt.imsave(f'{qcdir}dcf.tiff', np.transpose(img), cmap='gray', vmax=np.percentile(img, 99))
             
 
-            if True: # idx == 0:
+            if True:
                 pdb.set_trace() # pause for debugging
 
         return loss
