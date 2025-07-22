@@ -20,7 +20,22 @@ Altbach/Bilgin lab people.
 ## src
 
 ### radtse_dlrecon_train.py
-This script creates and trains the proposed DL model for RADTSE reconstruction. It requires training data in .h5 format
+This script creates and trains the proposed DL model for RADTSE reconstruction. It requires training data in .h5 format. The dataset requires the following:
+     - kspace (ncoils, etl, nshots, nsteps, nslice, 2): raw data
+     - smaps (ncoils, nx, ny, nslice, 2): coil sensitivity maps
+     - traj (etl, nshots, nsteps, nslice, 2): kspace trajectory coordinates
+     - dcf (etl, nshots, nsteps, nslice, 2): density compensation function
+     - dict (npcs, etl, nslice): temporal compression operator (used for TE/T2 network only)
+With the following dimensions:
+     - ncoils: number of (virtual) coils. We compress our data to 6 virtual coils to save memory and ensure all datasets have the same number of coils
+     - etl: echo train length, or the number of readouts following an excite pulse
+     - nshots: number of echo trains (number of excite pulses)
+     - nsteps: number of readout points (2x oversampling in the readout dimension gives 2x the prescribed matrix size)
+     - nslice: number of slices in the dataset
+     - nx, ny: image dimensions of the sensitivity maps. These are automatically cropped if larger than the desired image size
+     - npcs: number of principal components used in temporal compression (used for TE/T2 network only)
+In the version of matlab we used to generate the .h5 files (2020a), writing complex datasets was not supported, so the final dimension for complex fields denotes the real and imaginary components of the data.
+h5py does support writing and reading complex datasets, which is much faster than reading the real data and converting to complex. So the first time we encounter the .h5 file in python we re-write it as a complex dataset to be read in future iterations. This step could easily be removed if you start with complex datasets (in the `src/dataset/DataGenertor.py` file). 
 
 ### radtse_dlrecon_test.py
 This script evaluates the trained model. It requires testing data in .h5 format. Optionally, include a T2 dictionary and roi file, both in .h5 format, to do T2 quantification.
