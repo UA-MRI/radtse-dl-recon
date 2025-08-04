@@ -33,9 +33,9 @@ ncol = 512 # number of readout points in input data
 img_dims = [256, 256] # this will overwrite what is found in input data
 
 # INPUT DATA LOCATION
-h5_dir = '/clusterscratch/tonerbp/data/h5_data/h5_radtse_CAMDTECT/' # dir with data
-train_h5 = f'{h5_dir}radtse_CAMDTECT_train.h5'
-valid_h5 = f'{h5_dir}radtse_CAMDTECT_valid.h5'
+h5_dir = '/clusterscratch/tonerbp/data/h5_data/h5_radtse/' # dir with data
+train_h5 = f'{h5_dir}radtse_train.h5'
+valid_h5 = f'{h5_dir}radtse_valid.h5'
 
 # MODEL PARAMETERS
 DC_layer = 'DCGD' # type of DC layer. 'DCGD' or 'DCPM'
@@ -68,7 +68,7 @@ disjoint_loss = False # 1: calculate loss only on frequencies not used in input,
 dcf_method = 'ramp' # dcf method--options: 'ramp' 'pipe' or 'ones'
 
 # TRAINING PARAMETERS
-NUM_EPOCHS = 100 # number of training epochs
+NUM_EPOCHS = 10 # number of training epochs
 batch_size = 1 # batch size
 lr = 1e-4 # learning rate
 use_scheduler = 1 # learning rate scheduler

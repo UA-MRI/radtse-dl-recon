@@ -14,7 +14,7 @@ from models.train_model import train_model
 import yaml
 
 # IMAGE TYPE
-image_type = 'pcs' # composite or pcs
+image_type = 'composite' # composite or pcs
     
 # GPUs
 os.system('printenv | grep "CUDA_VISIBLE_DEVICES"')
@@ -22,21 +22,20 @@ os.system('printenv | grep "CUDA_VISIBLE_DEVICES"')
 # DATA INFO
 coils = 6 # number of channels found in input data (virtual or otherwise)
 ncol = 512 # number of readout points in input data
-img_dims = [320, 320] # this will overwrite what is fund in test data
+img_dims = [256, 256] # this will overwrite what is fund in test data
 
 # TEST DATA INFOamma
-h5_dir = '/clusterscratch/tonerbp/data/h5_data/h5_radtse_pcs/' # dir with data
-test_keys = ['FBpaper_384'] # list of h5 file names
+h5_dir = '/clusterscratch/tonerbp/data/h5_data/h5_radtse_CAMDTECT/' # dir with data
+test_keys = ['RADTSE'] # list of h5 file names
 
 # TEST PARAMETERS
 vmax = 99 # percentile to scale max to in output images
-R =  6 / 12 # 12 # retrospective under-sampling rate
+R = 4/4 # retrospective under-sampling rate
 prescan_norm_power = 1 # exponent to raise prescan normalization map to (1 = use as is, 0 = do not use at all)
-test_idx = [13] # None # list of slices to reconstruct, or set to None for all slices
-q = -1
+test_idx = None # list of slices to reconstruct, or set to None for all slices
 fov = 256 # fov for output images and error calculation
 routine = 'test_model' # test_model or error_metrics
-signal_threshold = 0 # whether or not to threshodl the T2 map by anatomical image signal
+signal_threshold = 0 # whether or not to threshold the T2 map by anatomical image signal
 
 # TEST PARAMETERS SPECIFIC TO IMAGE TYPE
 if image_type == 'composite':
@@ -46,17 +45,18 @@ if image_type == 'composite':
     save_pc = True # for composite, the "pc image" is actually just the composite
     save_h5 = False # save output as .h5 for more analysis
 else:
-    TEs = [4,10,11,21] # list of TEs to save images of
+    TEs = [7] # list of TEs to save images of
     save_t2 = True # save T2 images
-    save_gif = True # save gif of all TEs for given slice
-    save_pc = True # save pc images
+    save_gif = False # save gif of all TEs for given slice
+    save_pc = False # save pc images
     save_h5 = False # save output as .h5 for more analysis
 
 # MODEL PARAMET5RS
 ncascades = 5 # total cascades in network
 nconvolutions = 5 # convolutions per denoiser block
 denoiser = 'CNN' # CNN currently supported--could import your own architecture
-train_nlin = 384 # radial views of training data
+train_nlin = 516 # radial views of training data
+test_nlin = 516 # radial views of testing data
 
 
 # FIND TRAINED MODEL
@@ -66,8 +66,8 @@ model_dir = f'{model_dir}{model_name}'
 
 ## MOST RECENT MODEL
 models = glob(f'{model_dir}models/EPOCH_*.pth') # list models
-model_path = sorted(models)[-1] # most recent model
-# model_path = f'{model_dir}models/bestLOSS.pth' # best training loss
+# model_path = sorted(models)[-1] # most recent model
+model_path = f'{model_dir}models/bestLOSS.pth' # best training loss
 
 print(f'Model path: {model_path}')
 if not os.path.exists(model_path):
@@ -81,9 +81,9 @@ with open(f'{model_dir}config.yaml', 'r') as yf:
 # LOOP THROUGH TEST KEYS
 for key in test_keys:
     
-    nlin = int(key.split('_')[-1]) # nlin of test
+    nlin = test_nlin
     odir = f'{model_dir}{key}_{int(np.round(nlin*R))}/' # output directory
-    test_h5 = f'{h5_dir}radtse_{coils:02d}coils_{key}_test.h5' # input file
+    test_h5 = f'{h5_dir}radtse_{key}_test.h5' # input file
     print(test_h5)
     
     if save_h5:
