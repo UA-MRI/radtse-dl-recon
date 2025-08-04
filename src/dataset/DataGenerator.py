@@ -259,7 +259,7 @@ class DataGeneratorRADTSE(Dataset):
 
             # try again if we masked all non-zero parts
             if self.phase == 'train':
-                while (kspace*masks.unsqueeze(1)).sum() == 0:
+                while torch.any((kspace*masks.unsqueeze(1)).sum([1,2,3]) == 0):
                     masks = self.get_masks().to(self.device)
             
         # get noisy input

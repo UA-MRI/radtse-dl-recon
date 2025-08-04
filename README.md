@@ -40,7 +40,19 @@ In the version of matlab we used to generate the .h5 files (2020a), writing comp
 h5py does support writing and reading complex datasets, which is much faster than reading the real data and converting to complex. So the first time we encounter the .h5 file in python we re-write it as a complex dataset to be read in future iterations. This step could easily be removed if you start with complex datasets (in the `src/dataset/DataGenertor.py` file). 
 
 ### radtse_dlrecon_test.py
-This script evaluates the trained model. It requires testing data in .h5 format. Optionally, include a T2 dictionary and roi file, both in .h5 format, to do T2 quantification.
+This script evaluates the trained model. It requires testing data in .h5 format. Optionally, include a T2 dictionary to generate T2 maps and an roi file to do T2 quantification.
+The dictionary .h5 file generally has the following fields (although for specific uses not all may be necessary):
+- u (etl x npc): compression operator
+- s (etl x 1): singular values from SVD compression
+- magnetization (npc x natoms): signal decay curves
+- normalization (1 x natoms): factors used to normalize magnetization
+- lookup_table (natoms x 2): lookup table for (B1, T2)
+- TE: echo spacing (in s)
+- ETL: etl
+- FAdeg: refocusing flip angle (in degrees)
+- T1: T1 value used (in s)
+- fcoherence (etl x 1): example signal with infinite T1 and T2, used only in calculating effective TE for VFA data
+- alpha (etl x 1): Actual refocusing flip angles played by the sequence (radians)
 
 ### gen_fastMRI_h5.py
 Without real RADTSE data, it is possible to use this package on simulated radial data. This script will create simulated radial data from fastMRI data. 

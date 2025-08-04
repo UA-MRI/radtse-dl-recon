@@ -161,15 +161,6 @@ class RADTSEUnrolledNetwork(UnrolledNetwork):
             xmax = nx // 2 + fov//2
             ymin = ny // 2 - fov//2
             ymax = ny // 2 + fov//2
-
-            
-            # override for creating figures
-            nnx = 208 # even number
-            nny = 160 # even number
-            xmin = nx // 2 - nnx // 2
-            xmax = nx // 2 + nnx // 2
-            ymin = ny // 2 - nny // 2
-            ymax = ny // 2 + nny // 2
             
 
             # save PC images
@@ -455,7 +446,7 @@ class RADTSEUnrolledNetwork(UnrolledNetwork):
                 plt.imsave(f'{out_dir}images/{save_prefix}_recon_{testidx:03d}_T2.tiff',
                            recon_T2map, cmap=T2cmap, vmin=T2min, vmax=T2max)
 
-                
+                """
                 # fit maps
                 if targets is not None:
                     target_fit = np.transpose(target_fit.abs().cpu().numpy(), (1,0))
@@ -489,7 +480,7 @@ class RADTSEUnrolledNetwork(UnrolledNetwork):
                         h5file.create_dataset('target_T2', data=target_T2map)
                         h5file.create_dataset('target_T2_fit', data=target_fit)
                     h5file.close()
-                    
+                """
 
     # save gif
     def save_gif(self, img_stack, oname, vmax=99):
@@ -649,7 +640,7 @@ class RADTSEUnrolledNetwork(UnrolledNetwork):
     # test with trained model
     def error_metrics(self, test_generator, out_dir, indices=None, save_prefix='',
                     load_model_path=None, NUM_EPOCHS=-1, ema_model=None, mag=True,
-                    TEs=[], q=1, fov=256, vmax=100):
+                    TEs=[], q=-1, fov=256, vmax=100):
         # mode model to device
         print(f'\nTEST USING GPU: {torch.cuda.is_available()}')
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
