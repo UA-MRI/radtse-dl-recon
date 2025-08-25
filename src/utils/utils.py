@@ -267,20 +267,20 @@ def gen_t2_maps(alpha, D, x_range=[0,-1], y_range=[0,-1]):
     alpha = alpha.to(device)
     alpha = alpha[:,x_range[0]:x_range[1],y_range[0]:y_range[1]]
     [npc, ny, nx] = alpha.shape
+    alpha = torch.reshape(alpha, [npc, ny*nx])
+    alpha = alpha / (torch.norm(alpha, p=2, dim=0) + 1e-8)
 
-    # 2D method
+    # 1D method
     Dmag = torch.permute(torch.from_numpy(D['magnetization']),[1,0]).to(device,torch.complex64)
     T2_table = torch.from_numpy(D['lookup_table'][:,1]).to(device)
-    T2map = torch.zeros([ny,nx]).to(device)
-    fit_map = torch.zeros([ny,nx]).to(device)
-    for qidx in range(ny):
-        # ip = Dmag @ alpha[:,qidx,:]
-        ip = Dmag @ (alpha[:,qidx,:] / (torch.norm(alpha[:,qidx,:], p=2, dim=0) + 1e-8))
 
-        idx = torch.argmax(ip.abs(), dim=0)
-        T2map[qidx,:] = torch.take(T2_table, idx)
+    ip = torch.inner(Dmag, alpha.H)
 
-        [fit_map[qidx,:],_] = torch.max(ip.abs(), dim=0)
+    [fit_map, idx] = torch.max(ip.abs(), dim=0)
+    T2map = torch.take(T2_table, idx)
+
+    T2map = torch.reshape(T2map, [ny, nx])
+    fit_map = torch.reshape(fit_map, [ny, nx])
     
     return T2map.cpu().numpy(), fit_map
 
